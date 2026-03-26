@@ -1,0 +1,234 @@
+import React, { useState, useEffect } from 'react';
+
+const buildPath = (waypoints) => {
+  let path = [];
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    let curr = waypoints[i];
+    let next = waypoints[i + 1];
+    if (curr.x === next.x) {
+      let dir = curr.y < next.y ? 1 : -1;
+      for (let y = curr.y; y !== next.y; y += dir) {
+        path.push({ x: curr.x, y });
+      }
+    } else {
+      let dir = curr.x < next.x ? 1 : -1;
+      for (let x = curr.x; x !== next.x; x += dir) {
+        path.push({ x, y: curr.y });
+      }
+    }
+  }
+  path.push(waypoints[waypoints.length - 1]);
+  return path;
+};
+
+const pathPool = {
+  dog: [
+    [{ x: 1, y: 0 }, { x: 1, y: 4 }, { x: 5, y: 4 }, { x: 5, y: 5 }],
+    [{ x: 1, y: 0 }, { x: 3, y: 0 }, { x: 3, y: 5 }, { x: 5, y: 5 }],
+    [{ x: 1, y: 0 }, { x: 1, y: 2 }, { x: 4, y: 2 }, { x: 4, y: 5 }, { x: 5, y: 5 }]
+  ],
+  cat: [
+    [{ x: 4, y: 0 }, { x: 4, y: 1 }, { x: 6, y: 1 }, { x: 6, y: 3 }, { x: 5, y: 3 }, { x: 5, y: 5 }],
+    [{ x: 4, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }],
+    [{ x: 4, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 3 }, { x: 5, y: 3 }, { x: 5, y: 5 }]
+  ],
+  bear: [
+    [{ x: 9, y: 0 }, { x: 9, y: 5 }, { x: 5, y: 5 }],
+    [{ x: 9, y: 0 }, { x: 7, y: 0 }, { x: 7, y: 3 }, { x: 6, y: 3 }, { x: 6, y: 5 }, { x: 5, y: 5 }],
+    [{ x: 9, y: 0 }, { x: 9, y: 1 }, { x: 8, y: 1 }, { x: 8, y: 4 }, { x: 5, y: 4 }, { x: 5, y: 5 }]
+  ]
+};
+
+const colors = { dog: '#22c55e', cat: '#ec4899', bear: '#3b82f6' };
+
+export default function App() {
+  const [paths, setPaths] = useState({ dog: [], cat: [], bear: [] });
+  const [steps, setSteps] = useState({ dog: 0, cat: 0, bear: 0 });
+  
+  const randomizePaths = () => {
+    const randomDog = buildPath(pathPool.dog[Math.floor(Math.random() * pathPool.dog.length)]);
+    const randomCat = buildPath(pathPool.cat[Math.floor(Math.random() * pathPool.cat.length)]);
+    const randomBear = buildPath(pathPool.bear[Math.floor(Math.random() * pathPool.bear.length)]);
+    
+    setPaths({ dog: randomDog, cat: randomCat, bear: randomBear });
+    setSteps({ dog: 0, cat: 0, bear: 0 });
+  };
+
+  useEffect(() => {
+    randomizePaths();
+  }, []);
+
+  const handleStep = (animal) => {
+    if (steps[animal] < paths[animal].length - 1) {
+      setSteps(prev => ({ ...prev, [animal]: prev[animal] + 1 }));
+    }
+  };
+
+  const isAllFinished = paths.dog.length > 0 && 
+    steps.dog === paths.dog.length - 1 &&
+    steps.cat === paths.cat.length - 1 &&
+    steps.bear === paths.bear.length - 1;
+
+  const cellSize = 40;
+  const margin = 30;
+  const gridWidth = 10;
+  const gridHeight = 6;
+  const svgWidth = margin * 2 + gridWidth * cellSize;
+  const svgHeight = margin * 2 + gridHeight * cellSize;
+
+  const renderPathSegments = (animal) => {
+    if (paths[animal].length === 0) return null;
+    const animalPaths = paths[animal];
+    const currentStep = steps[animal];
+    const lines = [];
+    
+    // 已經走過的實線
+    for (let i = 0; i < currentStep; i++) {
+      const p1 = animalPaths[i];
+      const p2 = animalPaths[i + 1];
+      lines.push(
+        <line key={`${animal}-${i}`} x1={margin + p1.x * cellSize} y1={margin + p1.y * cellSize} x2={margin + p2.x * cellSize} y2={margin + p2.y * cellSize} stroke={colors[animal]} strokeWidth="8" strokeLinecap="round" />
+      );
+    }
+    
+    // 剩下的所有虛線（包含下一步，外觀都一樣）
+    for (let i = currentStep; i < animalPaths.length - 1; i++) {
+      const p1 = animalPaths[i];
+      const p2 = animalPaths[i + 1];
+      lines.push(
+        <line key={`${animal}-dash-${i}`} x1={margin + p1.x * cellSize} y1={margin + p1.y * cellSize} x2={margin + p2.x * cellSize} y2={margin + p2.y * cellSize} stroke={colors[animal]} strokeWidth="4" strokeOpacity="0.3" strokeDasharray="6 6" strokeLinecap="round" />
+      );
+    }
+    
+    // 下一步的「透明觸控區」（覆蓋在第一段虛線上，加寬觸控範圍方便點擊）
+    if (currentStep < animalPaths.length - 1) {
+      const p1 = animalPaths[currentStep];
+      const p2 = animalPaths[currentStep + 1];
+      
+      lines.push(
+        <line 
+          key={`${animal}-next-touch`} 
+          x1={margin + p1.x * cellSize} 
+          y1={margin + p1.y * cellSize} 
+          x2={margin + p2.x * cellSize} 
+          y2={margin + p2.y * cellSize} 
+          stroke="transparent" 
+          strokeWidth="40" 
+          strokeLinecap="round" 
+          className="cursor-pointer"
+          onClick={() => handleStep(animal)}
+          onTouchStart={(e) => { e.preventDefault(); handleStep(animal); }}
+        />
+      );
+    }
+
+    return lines;
+  };
+
+  const getCurrentPos = (animal) => {
+    if (paths[animal].length === 0) return { x: 0, y: 0 };
+    const pos = paths[animal][steps[animal]];
+    return { x: margin + pos.x * cellSize, y: margin + pos.y * cellSize };
+  };
+
+  return (
+    <div className="h-screen w-screen bg-slate-50 flex flex-col p-2 sm:p-4 box-border overflow-hidden font-sans text-slate-800">
+      
+      {/* 頂部標題與按鈕區 */}
+      <div className="flex justify-between items-center w-full max-w-4xl mx-auto mb-2 shrink-0">
+        <h1 className="text-xl sm:text-2xl font-bold text-slate-800">去猴姐姐家 (觸控版)</h1>
+        <button onClick={randomizePaths} className="bg-amber-400 hover:bg-amber-500 text-amber-900 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl font-bold shadow-sm transition transform active:scale-95 text-sm sm:text-base">
+          🎲 換一題
+        </button>
+      </div>
+
+      <div className="text-center text-slate-600 mb-2 shrink-0 text-sm sm:text-base font-medium">
+        👆 請找出小動物的<span className="font-bold text-amber-600">下一步虛線</span>並點擊，帶牠們前進一格！
+      </div>
+
+      {/* 遊戲主要內容區 (使用 flex-1 填滿剩餘空間，內部滾動防溢出) */}
+      <div className="flex-1 flex flex-col gap-2 sm:gap-4 items-center w-full max-w-4xl mx-auto min-h-0">
+        
+        {/* 地圖區 (自動縮放，調大高度比例) */}
+        <div className="bg-white p-2 sm:p-4 rounded-2xl shadow-lg w-full flex-1 min-h-0 flex items-center justify-center">
+          <svg 
+            viewBox={`0 0 ${svgWidth} ${svgHeight}`} 
+            className="w-full h-full max-h-[65vh] drop-shadow-sm touch-none"
+            preserveAspectRatio="xMidYMid meet"
+          >
+            {/* 背景網格 */}
+            {Array.from({ length: gridHeight + 1 }).map((_, i) => (
+              <line key={`h-${i}`} x1={margin} y1={margin + i * cellSize} x2={margin + gridWidth * cellSize} y2={margin + i * cellSize} stroke="#f1f5f9" strokeWidth="2" />
+            ))}
+            {Array.from({ length: gridWidth + 1 }).map((_, i) => (
+              <line key={`v-${i}`} x1={margin + i * cellSize} y1={margin} x2={margin + i * cellSize} y2={margin + gridHeight * cellSize} stroke="#f1f5f9" strokeWidth="2" />
+            ))}
+
+            {paths.dog.length > 0 && (
+              <>
+                {renderPathSegments('dog')}
+                {renderPathSegments('cat')}
+                {renderPathSegments('bear')}
+                <text x={margin + 5 * cellSize - 15} y={margin + 5 * cellSize + 20} fontSize="28">🏠</text>
+                <text x={getCurrentPos('dog').x - 14} y={getCurrentPos('dog').y + 10} fontSize="28">🐶</text>
+                <text x={getCurrentPos('cat').x - 14} y={getCurrentPos('cat').y + 10} fontSize="28">🐱</text>
+                <text x={getCurrentPos('bear').x - 14} y={getCurrentPos('bear').y + 10} fontSize="28">🐻</text>
+              </>
+            )}
+          </svg>
+        </div>
+
+        {/* 橫向拉直比較區 (縮小高度與間距) */}
+        <div className="bg-white p-2 sm:p-3 rounded-2xl shadow-md w-full shrink-0">
+          <h2 className="text-sm sm:text-base font-bold text-center mb-1 sm:mb-2 text-slate-700">📏 每走一格，就排隊拉直比一比</h2>
+          
+          <div className="flex flex-col gap-1.5 sm:gap-2 w-full border-l-4 border-slate-300 pl-2 sm:pl-4 relative">
+            {/* 背景尺規刻度 */}
+            <div className="absolute top-0 bottom-0 left-2 sm:left-4 right-0 flex pointer-events-none opacity-20">
+              {Array.from({length: 12}).map((_, i) => (
+                 <div key={i} className="flex-1 border-r border-slate-800 border-dashed"></div>
+              ))}
+            </div>
+
+            {['dog', 'cat', 'bear'].map((animal) => {
+              const emojis = { dog: '🐶', cat: '🐱', bear: '🐻' };
+              return (
+                <div key={animal} className="flex items-center gap-2 relative z-10 h-6 sm:h-8">
+                  <div className="text-lg sm:text-xl w-6 sm:w-8 text-center">{emojis[animal]}</div>
+                  <div className="flex h-full items-center flex-1">
+                    {Array.from({ length: steps[animal] }).map((_, i) => (
+                      <div 
+                        key={i} 
+                        className="h-4 sm:h-6 w-4 sm:w-6 mr-1 rounded-sm shadow-sm animate-slide-right flex items-center justify-center"
+                        style={{ backgroundColor: colors[animal] }}
+                      >
+                        {/* 拿掉數字，讓畫面變純粹的色塊 */}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {isAllFinished && (
+            <div className="mt-2 text-center bg-yellow-100 text-yellow-800 p-1.5 sm:p-2 rounded-xl font-bold text-xs sm:text-sm animate-pulse">
+              大家都在終點集合啦！誰的線條最長呢？
+            </div>
+          )}
+        </div>
+        
+      </div>
+
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes slide-right {
+          0% { transform: translateX(-10px) scale(0.8); opacity: 0; }
+          100% { transform: translateX(0) scale(1); opacity: 1; }
+        }
+        .animate-slide-right {
+          animation: slide-right 0.3s ease-out forwards;
+        }
+      `}} />
+    </div>
+  );
+}
